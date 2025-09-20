@@ -4,11 +4,10 @@ Uses file content hashing to identify exact duplicates
 """
 
 import hashlib
-import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict
 
 import send2trash
 
@@ -276,8 +275,8 @@ class DuplicateFileDetector:
         return report_path
 
     def run_duplicate_detection(self, include_subdirs: bool = True,
-                              delete_duplicates: bool = False,
-                              keep_oldest: bool = True):
+                                delete_duplicates: bool = False,
+                                keep_oldest: bool = True):
         """Run complete duplicate detection process"""
         print("STARTING DUPLICATE FILE DETECTION")
         print("=" * 60)

@@ -3,15 +3,16 @@ Image Processing API
 FastAPI application for image upload, resize, and grayscale conversion
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
-from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
-from typing import Optional
 import io
 from pathlib import Path
-import os
+from typing import Optional
+
+from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from image_processor import image_processor
+
 
 # Pydantic models
 class ImageUploadResponse(BaseModel):
@@ -27,11 +28,13 @@ class ImageUploadResponse(BaseModel):
     processing_applied: list
     download_url: str
 
+
 class ErrorResponse(BaseModel):
     """Error response model"""
     success: bool
     error: str
     details: Optional[str] = None
+
 
 class ImageInfo(BaseModel):
     """Image information model"""
@@ -39,6 +42,7 @@ class ImageInfo(BaseModel):
     mode: str
     size: dict
     has_transparency: bool
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -52,6 +56,7 @@ app = FastAPI(
 # Configuration
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+
 
 @app.get("/", response_model=dict)
 async def root():
@@ -70,6 +75,7 @@ async def root():
         "processing": "Resize to 300x300 + Grayscale conversion"
     }
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -79,6 +85,7 @@ async def health_check():
         "processed_directory_exists": processed_dir.exists(),
         "processed_files_count": len(list(processed_dir.glob("*"))) if processed_dir.exists() else 0
     }
+
 
 @app.post("/upload-image", response_model=ImageUploadResponse)
 async def upload_image(file: UploadFile = File(...)):
@@ -91,14 +98,14 @@ async def upload_image(file: UploadFile = File(...)):
     - Saves in processed/ folder
     - Returns file path and metadata
     """
-    
+
     # Validate file
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No file provided"
         )
-    
+
     # Check file extension
     file_extension = Path(file.filename).suffix.lower()
     if file_extension not in ALLOWED_EXTENSIONS:
@@ -106,38 +113,38 @@ async def upload_image(file: UploadFile = File(...)):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported file format. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
         )
-    
+
     # Check content type
     if not image_processor.is_valid_image_format(file.content_type):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid content type: {file.content_type}"
         )
-    
+
     try:
         # Read file content
         content = await file.read()
-        
+
         # Check file size
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
+                detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024 * 1024)}MB"
             )
-        
+
         # Process image
         image_bytes = io.BytesIO(content)
         result = image_processor.process_image(image_bytes, file.filename)
-        
+
         if not result['success']:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Image processing failed: {result['error']}"
             )
-        
+
         # Create download URL
         download_url = f"/download/{result['processed_filename']}"
-        
+
         return ImageUploadResponse(
             success=True,
             message="Image processed successfully",
@@ -150,7 +157,7 @@ async def upload_image(file: UploadFile = File(...)):
             processing_applied=result['processing_applied'],
             download_url=download_url
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -158,6 +165,7 @@ async def upload_image(file: UploadFile = File(...)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}"
         )
+
 
 @app.get("/download/{filename}")
 async def download_processed_image(filename: str):
@@ -167,18 +175,19 @@ async def download_processed_image(filename: str):
     - **filename**: Name of the processed image file
     """
     file_path = Path("processed") / filename
-    
+
     if not file_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found"
         )
-    
+
     return FileResponse(
         path=file_path,
         media_type='image/jpeg',
         filename=filename
     )
+
 
 @app.post("/image-info", response_model=ImageInfo)
 async def get_image_info(file: UploadFile = File(...)):
@@ -188,32 +197,32 @@ async def get_image_info(file: UploadFile = File(...)):
     - Returns format, dimensions, and other metadata
     - Does not save or modify the image
     """
-    
+
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No file provided"
         )
-    
+
     try:
         content = await file.read()
         image_bytes = io.BytesIO(content)
-        
+
         info = image_processor.get_image_info(image_bytes)
-        
+
         if 'error' in info:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Could not read image: {info['error']}"
             )
-        
+
         return ImageInfo(
             format=info['format'],
             mode=info['mode'],
             size=info['size'],
             has_transparency=info['has_transparency']
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -221,6 +230,7 @@ async def get_image_info(file: UploadFile = File(...)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error reading image: {str(e)}"
         )
+
 
 @app.get("/processed-files")
 async def list_processed_files():
@@ -230,10 +240,10 @@ async def list_processed_files():
     Returns a list of all files in the processed directory
     """
     processed_dir = Path("processed")
-    
+
     if not processed_dir.exists():
         return {"files": [], "count": 0}
-    
+
     files = []
     for file_path in processed_dir.glob("*"):
         if file_path.is_file():
@@ -244,14 +254,15 @@ async def list_processed_files():
                 "created": stat.st_ctime,
                 "download_url": f"/download/{file_path.name}"
             })
-    
+
     # Sort by creation time (newest first)
     files.sort(key=lambda x: x['created'], reverse=True)
-    
+
     return {
         "files": files,
         "count": len(files)
     }
+
 
 @app.delete("/cleanup")
 async def cleanup_old_files():
@@ -262,23 +273,25 @@ async def cleanup_old_files():
     """
     try:
         image_processor.cleanup_old_files(max_files=100)
-        
+
         # Count remaining files
         processed_dir = Path("processed")
         remaining_count = len(list(processed_dir.glob("*"))) if processed_dir.exists() else 0
-        
+
         return {
             "success": True,
             "message": "Cleanup completed",
             "remaining_files": remaining_count
         }
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Cleanup failed: {str(e)}"
         )
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)

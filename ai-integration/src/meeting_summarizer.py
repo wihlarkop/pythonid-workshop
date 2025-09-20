@@ -1,277 +1,153 @@
 """
-Meeting Notes AI Summarizer
-Uses Google Gemini API to summarize meeting notes into bullet points
+Simple Meeting Notes Summarizer using Google Gemini AI
+Workshop Version - Easy to understand and use
 """
 
-import google.generativeai as genai
 import os
 from pathlib import Path
+import google.generativeai as genai
 from dotenv import load_dotenv
-import sys
-import argparse
 
-class MeetingSummarizer:
-    """AI-powered meeting notes summarizer using Google Gemini"""
 
-    def __init__(self, api_key=None):
-        """Initialize the summarizer with API key"""
-        # Load environment variables
-        load_dotenv()
+def setup_gemini_api():
+    """Setup Gemini API with API key from environment or user input"""
+    load_dotenv()
 
-        # Get API key from parameter, environment, or prompt user
-        if api_key:
-            self.api_key = api_key
-        elif os.getenv('GEMINI_API_KEY'):
-            self.api_key = os.getenv('GEMINI_API_KEY')
+    api_key = os.getenv('GEMINI_API_KEY')
+
+    if not api_key:
+        print("⚠️  No Gemini API key found in .env file")
+        print("\n📝 Get your free API key from:")
+        print("   https://makersuite.google.com/app/apikey")
+        print("\nThen create a .env file with:")
+        print("   GEMINI_API_KEY=your_key_here\n")
+
+        api_key = input("Enter your Gemini API key (or press Enter to exit): ").strip()
+        if not api_key:
+            print("❌ No API key provided. Exiting...")
+            exit()
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        print("✅ Gemini API configured successfully\n")
+        return model
+    except Exception as e:
+        print(f"❌ Error setting up Gemini: {e}")
+        exit()
+
+
+def load_meeting_notes(file_path="data/meeting_notes.txt"):
+    """Load meeting notes from text file"""
+    try:
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            print(f"❌ File not found: {file_path}")
+            print("📝 Please create a file with your meeting notes at:")
+            print(f"   {file_path.absolute()}")
+            return None
+
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+
+        if not content:
+            print("❌ Meeting notes file is empty")
+            return None
+
+        print(f"📄 Loaded meeting notes: {len(content)} characters")
+        return content
+
+    except Exception as e:
+        print(f"❌ Error reading file: {e}")
+        return None
+
+
+def generate_summary(model, meeting_text):
+    """Generate meeting summary using Gemini"""
+    prompt = f"""
+    Please analyze these meeting notes and create a summary with:
+
+    1. Key Decisions (what was decided)
+    2. Action Items (who needs to do what by when)
+    3. Important Topics (main discussion points)
+    4. Next Steps (what happens next)
+
+    Meeting Notes:
+    {meeting_text}
+
+    Please provide a clear, bullet-point summary:
+    """
+
+    try:
+        print("🤖 Generating AI summary...")
+        response = model.generate_content(prompt)
+
+        if response.text:
+            print("✅ Summary generated successfully!\n")
+            return response.text
         else:
-            print("⚠️  No Gemini API key found.")
-            print("Please either:")
-            print("1. Set GEMINI_API_KEY environment variable")
-            print("2. Create a .env file with GEMINI_API_KEY=your_key")
-            print("3. Get a free API key from: https://makersuite.google.com/app/apikey")
-
-            # Option to enter API key interactively
-            self.api_key = input("Enter your Gemini API key (or press Enter to exit): ").strip()
-            if not self.api_key:
-                print("No API key provided. Exiting...")
-                sys.exit(1)
-
-        # Configure Gemini
-        try:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
-            print("✅ Gemini API configured successfully")
-        except Exception as e:
-            print(f"❌ Error configuring Gemini API: {e}")
-            sys.exit(1)
-
-    def load_meeting_notes(self, file_path):
-        """Load meeting notes from text file"""
-        try:
-            file_path = Path(file_path)
-            if not file_path.exists():
-                raise FileNotFoundError(f"Meeting notes file not found: {file_path}")
-
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-
-            if not content:
-                raise ValueError("Meeting notes file is empty")
-
-            print(f"📄 Loaded meeting notes from: {file_path}")
-            print(f"📊 Content length: {len(content)} characters")
-            return content
-
-        except Exception as e:
-            print(f"❌ Error loading meeting notes: {e}")
+            print("❌ No response from Gemini")
             return None
 
-    def create_summary_prompt(self, meeting_text):
-        """Create a comprehensive prompt for meeting summarization"""
-        prompt = f"""
-Please analyze the following meeting notes and provide a comprehensive summary in bullet point format.
+    except Exception as e:
+        print(f"❌ Error generating summary: {e}")
+        return None
 
-Focus on:
-- Key decisions made
-- Action items with owners and deadlines
-- Important discussion points
-- Next steps and follow-ups
-- Any risks or concerns raised
 
-Format your response as clear, concise bullet points organized by category.
+def save_summary(summary, output_file="output/meeting_summary.md"):
+    """Save the summary to a markdown file"""
+    try:
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-Meeting Notes:
-{meeting_text}
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("# AI Meeting Summary\n\n")
+            f.write(summary)
+            f.write("\n\n---\n*Generated using Google Gemini AI*")
 
-Please provide the summary now:
-"""
-        return prompt
-
-    def summarize_with_gemini(self, meeting_text):
-        """Generate summary using Gemini API"""
-        try:
-            print("🤖 Generating AI summary with Gemini...")
-
-            # Create the prompt
-            prompt = self.create_summary_prompt(meeting_text)
-
-            # Generate summary
-            response = self.model.generate_content(prompt)
-
-            if response.text:
-                print("✅ Summary generated successfully")
-                return response.text.strip()
-            else:
-                raise ValueError("Empty response from Gemini API")
-
-        except Exception as e:
-            print(f"❌ Error generating summary: {e}")
-            return None
-
-    def save_summary(self, summary, output_path):
-        """Save summary to file"""
-        try:
-            output_path = Path(output_path)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write("# Meeting Summary (Generated by AI)\n\n")
-                f.write(summary)
-                f.write(f"\n\n---\n*Summary generated using Google Gemini API*")
-
-            print(f"💾 Summary saved to: {output_path}")
-            return True
-
-        except Exception as e:
-            print(f"❌ Error saving summary: {e}")
-            return False
-
-    def format_summary_for_display(self, summary):
-        """Format summary for better console display"""
-        lines = summary.split('\n')
-        formatted_lines = []
-
-        for line in lines:
-            line = line.strip()
-            if not line:
-                formatted_lines.append("")
-                continue
-
-            # Add emoji indicators for different types of content
-            if any(keyword in line.lower() for keyword in ['decision', 'decided', 'approved']):
-                formatted_lines.append(f"✅ {line}")
-            elif any(keyword in line.lower() for keyword in ['action', 'todo', 'task', 'deadline']):
-                formatted_lines.append(f"📋 {line}")
-            elif any(keyword in line.lower() for keyword in ['risk', 'concern', 'issue', 'problem']):
-                formatted_lines.append(f"⚠️  {line}")
-            elif any(keyword in line.lower() for keyword in ['next', 'follow-up', 'upcoming']):
-                formatted_lines.append(f"👉 {line}")
-            else:
-                formatted_lines.append(f"• {line}")
-
-        return '\n'.join(formatted_lines)
-
-    def process_meeting_notes(self, input_file, output_file=None, display_only=False):
-        """Complete workflow to process meeting notes"""
-        print("🚀 Starting Meeting Notes AI Summarization")
-        print("=" * 60)
-
-        # Load meeting notes
-        meeting_text = self.load_meeting_notes(input_file)
-        if not meeting_text:
-            return False
-
-        # Generate summary
-        summary = self.summarize_with_gemini(meeting_text)
-        if not summary:
-            return False
-
-        # Format for display
-        formatted_summary = self.format_summary_for_display(summary)
-
-        # Display summary
-        print("\n" + "=" * 60)
-        print("📝 AI-GENERATED MEETING SUMMARY")
-        print("=" * 60)
-        print(formatted_summary)
-        print("=" * 60)
-
-        # Save summary if requested
-        if not display_only and output_file:
-            self.save_summary(summary, output_file)
-
+        print(f"💾 Summary saved to: {output_path}")
         return True
 
+    except Exception as e:
+        print(f"❌ Error saving summary: {e}")
+        return False
 
-def create_sample_env_file():
-    """Create a sample .env file for API key configuration"""
-    env_content = """# Google Gemini API Configuration
-# Get your free API key from: https://makersuite.google.com/app/apikey
-GEMINI_API_KEY=your_gemini_api_key_here
 
-# Optional: Set default input/output paths
-DEFAULT_MEETING_NOTES=data/meeting_notes.txt
-DEFAULT_OUTPUT_DIR=output/
-"""
-
-    env_path = Path('.env.example')
-    with open(env_path, 'w') as f:
-        f.write(env_content)
-
-    print(f"📝 Sample environment file created: {env_path}")
-    print("Rename it to '.env' and add your actual API key")
+def display_summary(summary):
+    """Display the summary in the console"""
+    print("=" * 60)
+    print("📝 MEETING SUMMARY")
+    print("=" * 60)
+    print(summary)
+    print("=" * 60)
 
 
 def main():
-    """Main function with command line interface"""
-    parser = argparse.ArgumentParser(
-        description="Summarize meeting notes using Google Gemini AI",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python meeting_summarizer.py                           # Use default meeting_notes.txt
-  python meeting_summarizer.py -i my_meeting.txt        # Specify input file
-  python meeting_summarizer.py -o summary.md            # Specify output file
-  python meeting_summarizer.py --display-only           # Display only, don't save
-  python meeting_summarizer.py --create-env             # Create sample .env file
+    """Main function - runs the complete summarization process"""
+    print("\n🚀 Meeting Notes AI Summarizer")
+    print("=" * 60)
 
-Get your free Gemini API key from:
-https://makersuite.google.com/app/apikey
-        """
-    )
+    # Step 1: Setup Gemini API
+    model = setup_gemini_api()
 
-    parser.add_argument('-i', '--input',
-                       default='data/meeting_notes.txt',
-                       help='Input meeting notes file (default: data/meeting_notes.txt)')
-
-    parser.add_argument('-o', '--output',
-                       default='output/meeting_summary.md',
-                       help='Output summary file (default: output/meeting_summary.md)')
-
-    parser.add_argument('--display-only', action='store_true',
-                       help='Display summary only, do not save to file')
-
-    parser.add_argument('--create-env', action='store_true',
-                       help='Create sample .env file and exit')
-
-    parser.add_argument('--api-key',
-                       help='Gemini API key (overrides environment variable)')
-
-    args = parser.parse_args()
-
-    # Handle special commands
-    if args.create_env:
-        create_sample_env_file()
+    # Step 2: Load meeting notes
+    meeting_text = load_meeting_notes()
+    if not meeting_text:
         return
 
-    # Initialize summarizer
-    try:
-        summarizer = MeetingSummarizer(api_key=args.api_key)
-    except KeyboardInterrupt:
-        print("\n👋 Goodbye!")
-        return
-    except SystemExit:
+    # Step 3: Generate summary
+    summary = generate_summary(model, meeting_text)
+    if not summary:
         return
 
-    # Process meeting notes
-    try:
-        success = summarizer.process_meeting_notes(
-            input_file=args.input,
-            output_file=args.output,
-            display_only=args.display_only
-        )
+    # Step 4: Display summary
+    display_summary(summary)
 
-        if success:
-            print("\n🎉 Meeting summarization completed successfully!")
-        else:
-            print("\n❌ Meeting summarization failed!")
-            sys.exit(1)
+    # Step 5: Save summary
+    save_summary(summary)
 
-    except KeyboardInterrupt:
-        print("\n\n👋 Summarization interrupted by user")
-    except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
-        sys.exit(1)
+    print("\n✨ Done! Your meeting has been summarized.")
 
 
 if __name__ == "__main__":

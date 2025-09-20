@@ -6,7 +6,6 @@ Organizes files based on their extensions into categorized folders
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
 
 
 class FileTypeOrganizer:
